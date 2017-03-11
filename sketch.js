@@ -14,9 +14,9 @@ function draw() {
   update();
   background(50,89,100);
   stroke(255,255,255,30);
-  strokeWeight(5);
+  strokeWeight(1);
   for (var i = 0; i < 100; i++) {
-    ray(createVector(mouseX, mouseY));
+    ray(createVector(mouseX, mouseY), direction(i / 100));
   }
   poly.draw();
   
@@ -178,9 +178,7 @@ function Fruit(sprout,c){
 }
 
 
-function ray(start){
-  var dir = createVector(random(-1,1),random(-1,1));
-  dir.normalize();
+function ray(start, dir){
   var earliestCollision = undefined;
   for(var i= 0; i < poly.points.length; i ++){
     var x1 = poly.c.x + poly.points[i].x;
@@ -207,6 +205,13 @@ function ray(start){
   if (earliestCollision === undefined) {
     earliestCollision = max(width, height);
   }
-  
   line(start.x, start.y, start.x + dir.x * earliestCollision, start.y + dir.y * earliestCollision);
+}
+
+function direction(i){
+  var n = noise(i * 20, millis() * 0.00001);
+  var angle = n * 5 * PI + millis() * 0.0001;
+  var x = cos(angle);
+  var y = sin(angle);
+  return createVector(x,y);
 }
