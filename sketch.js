@@ -1,9 +1,14 @@
 var poly;
+var surfaces = [];
 
 function setup() {
   createCanvas(640,480);
   
   poly = new Poly(80);
+
+  for (var i = 0; i < 100; i++) {
+    surfaces.push(new Surface(createVector(random(width), random(height)), createVector(random(width), random(height))));
+  }
 }
 
 function update(){
@@ -12,40 +17,80 @@ function update(){
 
 function draw() {
   update();
+
   background(50,89,100);
+
   stroke(255,255,255,30);
   strokeWeight(1);
-  for (var i = 0; i < 100; i++) {
-    ray(createVector(mouseX, mouseY), direction(i / 100));
+  var rayNumber = 500;
+
+  for (var i = 0; i < rayNumber; i++) {
+    ray(createVector(mouseX, mouseY), direction((i + 1) / rayNumber));
   }
+
+  surfaces.forEach(function(s) {
+    s.draw(createVector(0, 0));
+  })
+
   poly.draw();
-  
+}
+
+function Surface(p1,p2){
+  this.p1 = p1;
+  this.p2 = p2;
+
+  this.getCollisionDistance = function(c, start, dir){
+    var x1 = c.x + p1.x;
+    var y1 = c.y + p1.y;
+    var x2 = c.x + p2.x;
+    var y2 = c.y + p2.y;
+      
+    var dx = x2 - x1;
+    var dy = y2 - y1;
+    var denum = (dy - dir.y/dir.x * dx)
+    if (denum === 0){
+      return;
+    }
+    var t = (start.y - y1 + dir.y/dir.x * (x1 - start.x)) / denum;
+    var p = (x1 + dx * t - start.x) / dir.x
+    
+    if (p >= 0 && t >= 0 && t <= 1) {
+      return p;
+    } else {
+      return Infinity;
+    }
+  }
+
+  this.draw = function (c){ 
+    stroke(0);
+    line(c.x + p1.x, c.y + p1.y, c.x + p2.x, c.y + p2.y);
+  }
+    
 }
 
 function Poly(n){
-  this.points = [];
+  this.surfaces = [];
   this.sprouts = [];
   this.r = 100;
   this.c = new p5.Vector(random(width),random(height));
-  var a = 2*PI/n;
+  var a = 2*PI/(n-1);
   var offset= random(PI)
   
-  for(var i = 0; i < n; i ++){
+  for(var i = 0; i < n-1; i ++){
     var angle = i*a + offset;
-    var x = cos(angle)*this.r;
-    var y = sin(angle)*this.r;
-    this.points.push(
-      new p5.Vector(x,y)
-    );
+    var x1 = cos(angle)*this.r;
+    var y1 = sin(angle)*this.r;
+    var angle2 = (i + 1) * a + offset;
+    var x2 = cos(angle2) * this.r;
+    var y2 = sin(angle2) * this.r;
+    
+    this.surfaces.push(new Surface(createVector(x1,y1),createVector(x2,y2)));
   }
   
-  for(var i= 0; i < n; i ++){
-    if (random(1) < 0.5) {
-      continue;
-    }
-    var p1 = this.points[i];
-    var p2 = this.points[(i+1)%n];
-    var p3 = this.points[(i+2)%n];
+  for(var i= 0; i < n-1; i ++){
+    var p1 = this.surfaces[i].p1;
+    var p2 = this.surfaces[i].p2;
+    var p3 = this.surfaces[(i+1)%(n-1)].p2;
 
     var v1 = p5.Vector.sub(p2, p1);
     var v2 = p5.Vector.sub(p2, p3);
@@ -64,18 +109,14 @@ function Poly(n){
     }
   }
   
-  this.draw = function(){
+  this.draw = function() {
     noStroke();
-    for(var i= 0; i < n; i ++){
-      line(
-        this.c.x + this.points[i].x, 
-        this.c.y + this.points[i].y, 
-        this.c.x + this.points[(i+1)%n].x, 
-        this.c.y + this.points[(i+1)%n].y
-      );
-    }
-    this.sprouts.forEach(function (s) {
-      s.draw(this.c);
+    this.surfaces.forEach(function (surface) {
+      surface.draw(this.c);
+    }.bind(this));
+
+    this.sprouts.forEach(function (sprout) {
+      sprout.draw(this.c);
     }.bind(this))
   }
 }
@@ -179,30 +220,26 @@ function Fruit(sprout,c){
 
 
 function ray(start, dir){
-  var earliestCollision = undefined;
-  for(var i= 0; i < poly.points.length; i ++){
-    var x1 = poly.c.x + poly.points[i].x;
-    var y1 = poly.c.y + poly.points[i].y;
-    var x2 = poly.c.x + poly.points[(i+1)%poly.points.length].x;
-    var y2 = poly.c.y + poly.points[(i+1)%poly.points.length].y;
-      
-    var dx = x2 - x1;
-    var dy = y2 - y1;
-    var denum = (dy - dir.y/dir.x * dx)
-    if (denum === 0){
-      return;
+  var earliestCollision = Infinity;
+
+  for (var i = 0; i < poly.surfaces.length; i++) {
+    var surface = poly.surfaces[i];
+    var d = surface.getCollisionDistance(poly.c,start,dir);
+    if(earliestCollision > d){
+      earliestCollision = d;
     }
-    var t = (start.y - y1 + dir.y/dir.x * (x1 - start.x)) / denum;
-    var p = (x1 + dx * t - start.x) / dir.x
-    
-    if (p >= 0 && t >= 0 && t <= 1) {
-      if (earliestCollision === undefined || p < earliestCollision) {
-        earliestCollision = p;
-      }
+  }
+
+  for (var i = 0; i < surfaces.length; i++) {
+    var surface = surfaces[i];
+    var d = surface.getCollisionDistance(createVector(0, 0), start, dir);
+    if(earliestCollision > d){
+      earliestCollision = d;
     }
   }
   
-  if (earliestCollision === undefined) {
+  
+  if (earliestCollision === Infinity) {
     earliestCollision = max(width, height);
   }
   line(start.x, start.y, start.x + dir.x * earliestCollision, start.y + dir.y * earliestCollision);
@@ -210,7 +247,7 @@ function ray(start, dir){
 
 function direction(i){
   var n = noise(i * 20, millis() * 0.00001);
-  var angle = n * 5 * PI + millis() * 0.0001;
+  var angle = n * 5 * PI;
   var x = cos(angle);
   var y = sin(angle);
   return createVector(x,y);
